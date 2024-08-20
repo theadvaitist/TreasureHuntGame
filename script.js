@@ -15,27 +15,6 @@ let trialsCompleted = 0;
 let realGame = false;
 let playerName = '';
 let playerData = [];
-let db;
-
-// Step 1: Open or Create the IndexedDB Database
-let request = indexedDB.open("GameDatabase", 1);
-
-request.onupgradeneeded = function(event) {
-    db = event.target.result;
-    let objectStore = db.createObjectStore("players", { keyPath: "playerID", autoIncrement: true });
-    objectStore.createIndex("playerName", "playerName", { unique: false });
-    objectStore.createIndex("choices", "choices", { unique: false });
-    objectStore.createIndex("rewards", "rewards", { unique: false });
-    objectStore.createIndex("totalReward", "totalReward", { unique: false });
-};
-
-request.onsuccess = function(event) {
-    db = event.target.result;
-};
-
-request.onerror = function(event) {
-    console.log("Database error: " + event.target.errorCode);
-};
 
 function getRandomReward(chest) {
     const rewards = chests[chest];
@@ -124,72 +103,27 @@ function savePlayerData() {
         totalReward
     };
 
-    storePlayerData(playerInfo);
+    saveDataToCSV(playerInfo);
 
     // Clear the player data for the next game
     playerData = [];
 }
 
-function storePlayerData(playerInfo) {
-    let transaction = db.transaction(["players"], "readwrite");
-    let objectStore = transaction.objectStore("players");
+function saveDataToCSV(playerInfo) {
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Player Name,Chest,Reward,Total Reward\n";
 
-    let request = objectStore.add(playerInfo);
+    playerInfo.selections.forEach(selection => {
+        csvContent += `${playerInfo.playerName},${selection.chestId},${selection.reward},${playerInfo.totalReward}\n`;
+    });
 
-    request.onsuccess = function(event) {
-        console.log("Player data has been added to your database.");
-    };
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `player_data_${playerInfo.playerName}.csv`);
+    document.body.appendChild(link);
 
-    request.onerror = function(event) {
-        console.log("Unable to add data: " + event.target.errorCode);
-    };
-
-    checkAndMaintainDatabaseSize();
-}
-
-function exportToExcel() {
-    let transaction = db.transaction(["players"], "readonly");
-    let objectStore = transaction.objectStore("players");
-
-    let allData = [];
-    objectStore.openCursor().onsuccess = function(event) {
-        let cursor = event.target.result;
-        if (cursor) {
-            allData.push(cursor.value);
-            cursor.continue();
-        } else {
-            // Convert to Excel using SheetJS
-            let worksheet = XLSX.utils.json_to_sheet(allData);
-            let workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, "Players Data");
-
-            // Save the Excel file
-            XLSX.writeFile(workbook, "PlayersData.xlsx");
-        }
-    };
-}
-
-function checkAndMaintainDatabaseSize() {
-    let transaction = db.transaction(["players"], "readwrite");
-    let objectStore = transaction.objectStore("players");
-
-    objectStore.count().onsuccess = function(event) {
-        let count = event.target.result;
-        if (count > 200) {
-            // Remove the oldest entries
-            let deleteCount = count - 200;
-            let cursorRequest = objectStore.openCursor();
-
-            cursorRequest.onsuccess = function(event) {
-                let cursor = event.target.result;
-                if (cursor && deleteCount > 0) {
-                    objectStore.delete(cursor.primaryKey);
-                    deleteCount--;
-                    cursor.continue();
-                }
-            };
-        }
-    };
+    link.click();
 }
 
 document.getElementById('enterGame').addEventListener('click', function () {
@@ -200,5 +134,3 @@ document.getElementById('enterGame').addEventListener('click', function () {
         alert('Please enter your name to start the game.');
     }
 });
-
-document.getElementById('exportData').addEventListener('click', exportToExcel);
