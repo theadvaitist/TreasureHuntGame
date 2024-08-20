@@ -1,0 +1,45 @@
+body {
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    background-color: #f0f0f0;
+}
+
+.game-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 80%;
+    margin-top: 20px;
+}
+
+.island {
+    border: 2px solid #333;
+    padding: 10px;
+    background-color: #fff;
+    text-align: center;
+    width: 30%;
+    margin-top: 10px;
+}
+
+.treasure-chest {
+    cursor: pointer;
+    margin: 10px;
+    padding: 20px;
+    border: 1px solid #666;
+    background-color: #c0c0c0;
+}
+
+#feedback, #summary {
+    margin-top: 20px;
+    text-align: center;
+    font-size: 1.2em;
+}
+
+#countdown {
+    margin-top: 20px;
+    font-size: 1.5em;
+}
