@@ -15,6 +15,27 @@ let trialsCompleted = 0;
 let realGame = false;
 let playerName = '';
 let playerData = [];
+let db;
+
+// Step 1: Open or Create the IndexedDB Database
+let request = indexedDB.open("GameDatabase", 1);
+
+request.onupgradeneeded = function(event) {
+    db = event.target.result;
+    let objectStore = db.createObjectStore("players", { keyPath: "playerID", autoIncrement: true });
+    objectStore.createIndex("playerName", "playerName", { unique: false });
+    objectStore.createIndex("choices", "choices", { unique: false });
+    objectStore.createIndex("rewards", "rewards", { unique: false });
+    objectStore.createIndex("totalReward", "totalReward", { unique: false });
+};
+
+request.onsuccess = function(event) {
+    db = event.target.result;
+};
+
+request.onerror = function(event) {
+    console.log("Database error: " + event.target.errorCode);
+};
 
 function getRandomReward(chest) {
     const rewards = chests[chest];
@@ -63,7 +84,7 @@ function handleChestClick(event) {
         playerData.push({ chestId, reward });
     }
 
-    if (clickCount >= 4) {
+    if (clickCount >= 12) {
         endPhase();
     }
 }
@@ -76,7 +97,7 @@ function startTrials() {
     document.getElementById('feedback').textContent = '';
     clickCount = 0;
     totalReward = 0;
-    timeLeft = 45;
+    timeLeft = 120;
     document.getElementById('timer').textContent = timeLeft;
     countdown = setInterval(updateTimer, 1000);
 }
@@ -91,7 +112,7 @@ function startRealGame() {
     document.getElementById('feedback').textContent = '';
     clickCount = 0;
     totalReward = 0;
-    timeLeft = 60;
+    timeLeft = 240;
     document.getElementById('timer').textContent = timeLeft;
     countdown = setInterval(updateTimer, 1000);
 }
@@ -103,26 +124,72 @@ function savePlayerData() {
         totalReward
     };
 
-    sendDataToGoogleSheet(playerInfo);
+    storePlayerData(playerInfo);
 
     // Clear the player data for the next game
     playerData = [];
 }
 
-function sendDataToGoogleSheet(playerInfo) {
-    const sheetUrl = "https://script.google.com/macros/s/AKfycbw-wUnqrTJi8zxoCqea3vaVeQLQ_dJxW_31e7DZP2Av5T4ifTNwMoHZ-JOtD375cYQxZw/exec"; // Replace with your Google Sheets Web App URL
+function storePlayerData(playerInfo) {
+    let transaction = db.transaction(["players"], "readwrite");
+    let objectStore = transaction.objectStore("players");
 
-    const payload = JSON.stringify(playerInfo);
+    let request = objectStore.add(playerInfo);
 
-    fetch(sheetUrl, {
-        method: 'POST',
-        body: payload,
-        headers: {
-            'Content-Type': 'application/json'
+    request.onsuccess = function(event) {
+        console.log("Player data has been added to your database.");
+    };
+
+    request.onerror = function(event) {
+        console.log("Unable to add data: " + event.target.errorCode);
+    };
+
+    checkAndMaintainDatabaseSize();
+}
+
+function exportToExcel() {
+    let transaction = db.transaction(["players"], "readonly");
+    let objectStore = transaction.objectStore("players");
+
+    let allData = [];
+    objectStore.openCursor().onsuccess = function(event) {
+        let cursor = event.target.result;
+        if (cursor) {
+            allData.push(cursor.value);
+            cursor.continue();
+        } else {
+            // Convert to Excel using SheetJS
+            let worksheet = XLSX.utils.json_to_sheet(allData);
+            let workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Players Data");
+
+            // Save the Excel file
+            XLSX.writeFile(workbook, "PlayersData.xlsx");
         }
-    }).then(response => response.text())
-      .then(data => console.log(data))
-      .catch(error => console.error('Error:', error));
+    };
+}
+
+function checkAndMaintainDatabaseSize() {
+    let transaction = db.transaction(["players"], "readwrite");
+    let objectStore = transaction.objectStore("players");
+
+    objectStore.count().onsuccess = function(event) {
+        let count = event.target.result;
+        if (count > 200) {
+            // Remove the oldest entries
+            let deleteCount = count - 200;
+            let cursorRequest = objectStore.openCursor();
+
+            cursorRequest.onsuccess = function(event) {
+                let cursor = event.target.result;
+                if (cursor && deleteCount > 0) {
+                    objectStore.delete(cursor.primaryKey);
+                    deleteCount--;
+                    cursor.continue();
+                }
+            };
+        }
+    };
 }
 
 document.getElementById('enterGame').addEventListener('click', function () {
@@ -133,3 +200,5 @@ document.getElementById('enterGame').addEventListener('click', function () {
         alert('Please enter your name to start the game.');
     }
 });
+
+document.getElementById('exportData').addEventListener('click', exportToExcel);
