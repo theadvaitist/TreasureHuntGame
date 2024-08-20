@@ -10,7 +10,7 @@ const chests = {
 let clickCount = 0;
 let totalReward = 0;
 let countdown;
-let timeLeft = 30;
+let timeLeft = 120;
 let trialsCompleted = 0;
 let realGame = false;
 let playerName = '';
